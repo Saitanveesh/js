@@ -14,7 +14,7 @@ on:
       - wrangler.jsonc
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: swapshelf-cloudflare-preview
@@ -38,15 +38,17 @@ jobs:
           package-manager-cache: false
 
       - name: Prepare and verify Cloudflare credentials
+        id: credentials
+        continue-on-error: true
         shell: bash
         env:
           RAW_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RAW_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -euo pipefail
+          set -u
 
-          token="$(printf '%s' "$RAW_CLOUDFLARE_API_TOKEN" | grep -Eo '[A-Za-z0-9_-]{30,120}' | awk 'length($0) > max { max = length($0); value = $0 } END { print value }')"
-          account_id="$(printf '%s' "$RAW_CLOUDFLARE_ACCOUNT_ID" | grep -Eo '[0-9A-Fa-f]{32}' | head -n 1)"
+          token="$(printf '%s' "$RAW_CLOUDFLARE_API_TOKEN" | grep -Eo '[A-Za-z0-9_-]{30,120}' | awk 'length($0) > max { max = length($0); value = $0 } END { print value }' || true)"
+          account_id="$(printf '%s' "$RAW_CLOUDFLARE_ACCOUNT_ID" | grep -Eo '[0-9A-Fa-f]{32}' | head -n 1 || true)"
 
           if [ -z "$token" ]; then
             echo 'CLOUDFLARE_API_TOKEN does not contain a valid token value. Replace the GitHub secret with only the token shown by Cloudflare.' >&2
@@ -65,34 +67,96 @@ jobs:
 
           http_code="$(curl --silent --show-error --output token-verification.json --write-out '%{http_code}' \
             --header "Authorization: Bearer $token" \
-            https://api.cloudflare.com/client/v4/user/tokens/verify)"
+            https://api.cloudflare.com/client/v4/user/tokens/verify || true)"
 
-          if [ "$http_code" != '200' ] || ! grep -q '"success":true' token-verification.json; then
-            echo 'Cloudflare rejected the API token. Create a fresh token with Workers Scripts:Edit, Workers R2 Storage:Edit, D1:Edit, and Account Settings:Read, then replace CLOUDFLARE_API_TOKEN.' >&2
-            cat token-verification.json >&2
+          if [ "$http_code" != '200' ] || ! grep -q '"success":true' token-verification.json 2>/dev/null; then
+            echo 'Cloudflare rejected the API token. Replace CLOUDFLARE_API_TOKEN with the exact token value shown once after token creation.' >&2
             exit 1
           fi
 
       - name: Install dependencies
+        id: install
+        if: steps.credentials.outcome == 'success'
+        continue-on-error: true
         run: npm install --no-audit --no-fund
 
       - name: Run checks and tests
+        id: tests
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
         run: npm run check && npm test
 
       - name: Apply preview D1 migrations
+        id: migrate
+        if: steps.tests.outcome == 'success'
+        continue-on-error: true
         run: npx wrangler d1 migrations apply swapshelf-preview --env preview --remote
 
       - name: Deploy preview Worker
+        id: deploy
+        if: steps.migrate.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           npx wrangler deploy --env preview 2>&1 | tee deployment.log
+          deploy_code=${PIPESTATUS[0]}
           URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' deployment.log | tail -n 1 || true)"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          exit "$deploy_code"
+
+      - name: Record deployment result
+        if: always()
+        shell: bash
+        env:
+          CREDENTIALS_OUTCOME: ${{ steps.credentials.outcome }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          MIGRATION_OUTCOME: ${{ steps.migrate.outcome }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          mkdir -p .deployment
+          {
+            echo "updated_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo "commit=$GITHUB_SHA"
+            echo "credentials=$CREDENTIALS_OUTCOME"
+            echo "install=$INSTALL_OUTCOME"
+            echo "tests=$TESTS_OUTCOME"
+            echo "migration=$MIGRATION_OUTCOME"
+            echo "deployment=$DEPLOY_OUTCOME"
+            echo "preview_url=$PREVIEW_URL"
+          } > .deployment/preview-status.txt
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .deployment/preview-status.txt
+
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+
+          git commit -m 'Record preview deployment result [skip ci]'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.url }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+        run: |
           {
             echo '## SwapShelf preview deployment'
-            if [ -n "$URL" ]; then
-              echo "Preview URL: $URL"
+            echo "Deployment status: $DEPLOY_OUTCOME"
+            if [ -n "$PREVIEW_URL" ]; then
+              echo "Preview URL: $PREVIEW_URL"
             else
-              echo 'Deployment completed. Open the workflow log to copy the workers.dev URL.'
+              echo 'No preview URL was produced. See .deployment/preview-status.txt for the failed stage.'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail workflow when deployment did not succeed
+        if: ${{ always() && steps.deploy.outcome != 'success' }}
+        run: exit 1
