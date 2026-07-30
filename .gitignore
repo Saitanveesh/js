@@ -1,11 +1,12 @@
 node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
 .env
 .env.*
 !.env.example
-public/uploads/*
-!public/uploads/.gitkeep
-npm-debug.log*
 .DS_Store
 .vscode/
 .idea/
 coverage/
+*.log
