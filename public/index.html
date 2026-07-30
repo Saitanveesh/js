@@ -48,7 +48,7 @@
       <p class="eyebrow">Add material</p><h2>List a resource</h2>
       <form id="listing-form" enctype="multipart/form-data">
         <div class="two"><label>Type<select name="type" required><option value="BOOK">Book</option><option value="NOTES">Notes</option></select></label><label>Condition<select name="condition" required><option>Excellent</option><option>Good</option><option>Fair</option></select></label></div>
-        <label>ISBN, optional<div class="inline"><input id="isbn" inputmode="numeric" placeholder="978..."><button type="button" id="isbn-button">Look up</button></div></label>
+        <label>ISBN, optional<div class="inline"><input id="isbn" name="isbn" inputmode="numeric" placeholder="978..."><button type="button" id="isbn-button">Look up</button></div></label>
         <label>Title<input id="title" name="title" maxlength="160" required></label>
         <label>Author or subject<input id="author_subject" name="author_subject" maxlength="160" required></label>
         <label>Description<textarea id="description" name="description" rows="5" maxlength="2000" required></textarea></label>
@@ -66,10 +66,9 @@
   </main>
 
   <dialog id="listing-dialog"><button class="close" data-close>×</button><div id="listing-detail"></div></dialog>
-  <dialog id="contact-dialog"><button class="close" data-close>×</button><h2>Contact owner</h2><form id="request-form"><input type="hidden" name="owner_email"><input type="hidden" name="resource_title"><label>Your name<input name="requester_name" required></label><label>Your email<input name="requester_email" type="email" required></label><label>Message<textarea name="message" rows="5" required></textarea></label><button class="primary">Send request</button></form></dialog>
+  <dialog id="contact-dialog"><button class="close" data-close>×</button><h2>Contact owner</h2><form id="request-form"><input type="hidden" name="listing_id"><label>Your name<input name="requester_name" required></label><label>Your email<input name="requester_email" type="email" required></label><label>Message<textarea name="message" rows="5" required></textarea></label><button class="primary">Send request</button></form></dialog>
   <dialog id="login-dialog"><button class="close" data-close>×</button><h2>Admin login</h2><form id="login-form"><label>Username<input name="username" required></label><label>Password<input name="password" type="password" required></label><button class="primary">Log in</button></form></dialog>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script>window.SWAPSHELF_ADMIN = <%- JSON.stringify(isAdmin) %>;</script>
-  <script src="/js/app.js"></script>
+  <script src="/js/app.js" defer></script>
 </body>
 </html>
