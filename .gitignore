@@ -9,3 +9,7 @@ npm-debug.log*
 .vscode/
 .idea/
 coverage/
+.wrangler/
+.wrangler-build/
+.wrangler-build-preview/
+.dev.vars
