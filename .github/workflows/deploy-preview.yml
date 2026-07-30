@@ -2,6 +2,16 @@ name: Deploy Cloudflare Preview
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/deploy-preview.yml
+      - public/**
+      - src/**
+      - migrations/**
+      - package.json
+      - wrangler.jsonc
 
 permissions:
   contents: read
@@ -17,28 +27,34 @@ jobs:
 
     steps:
       - name: Check out main
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: main
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: package.json
+          node-version: 24
+          package-manager-cache: false
 
-      - name: Prepare Cloudflare credentials
+      - name: Prepare and verify Cloudflare credentials
         shell: bash
         env:
           RAW_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           RAW_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          token="$(printf '%s' "$RAW_CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
-          account_id="$(printf '%s' "$RAW_CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
+          set -euo pipefail
 
-          if [ -z "$token" ] || [ -z "$account_id" ]; then
-            echo "Missing GitHub repository secrets: CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID." >&2
+          token="$(printf '%s' "$RAW_CLOUDFLARE_API_TOKEN" | grep -Eo '[A-Za-z0-9_-]{30,120}' | awk 'length($0) > max { max = length($0); value = $0 } END { print value }')"
+          account_id="$(printf '%s' "$RAW_CLOUDFLARE_ACCOUNT_ID" | grep -Eo '[0-9A-Fa-f]{32}' | head -n 1)"
+
+          if [ -z "$token" ]; then
+            echo 'CLOUDFLARE_API_TOKEN does not contain a valid token value. Replace the GitHub secret with only the token shown by Cloudflare.' >&2
+            exit 1
+          fi
+
+          if [ -z "$account_id" ]; then
+            echo 'CLOUDFLARE_ACCOUNT_ID does not contain a 32-character account ID. Replace the GitHub secret with only the Account ID.' >&2
             exit 1
           fi
 
@@ -46,6 +62,16 @@ jobs:
           echo "::add-mask::$account_id"
           echo "CLOUDFLARE_API_TOKEN=$token" >> "$GITHUB_ENV"
           echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
+
+          http_code="$(curl --silent --show-error --output token-verification.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $token" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify)"
+
+          if [ "$http_code" != '200' ] || ! grep -q '"success":true' token-verification.json; then
+            echo 'Cloudflare rejected the API token. Create a fresh token with Workers Scripts:Edit, Workers R2 Storage:Edit, D1:Edit, and Account Settings:Read, then replace CLOUDFLARE_API_TOKEN.' >&2
+            cat token-verification.json >&2
+            exit 1
+          fi
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
@@ -59,9 +85,9 @@ jobs:
       - name: Deploy preview Worker
         shell: bash
         run: |
-          set -o pipefail
+          set -euo pipefail
           npx wrangler deploy --env preview 2>&1 | tee deployment.log
-          URL=$(grep -Eo 'https://[^ ]+\.workers\.dev' deployment.log | tail -n 1 || true)
+          URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' deployment.log | tail -n 1 || true)"
           {
             echo '## SwapShelf preview deployment'
             if [ -n "$URL" ]; then
