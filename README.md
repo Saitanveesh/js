@@ -1,85 +1,27 @@
 # SwapShelf
 
-SwapShelf is a student resource-sharing prototype for listing books and study notes, browsing available resources, and contacting resource owners.
+SwapShelf is a Cloudflare Worker with Static Assets. Listings live in D1 and private images live in R2; the browser no longer uses `localStorage` as its source of truth.
 
-## Current scope
+## Storage safety
 
-- Single-page EJS interface
-- Book and notes listings
-- Image uploads, limited to five images per listing
-- ISBN lookup through Google Books
-- Session-based admin login
-- Optional request emails through SendGrid
-- Browser `localStorage` for listing data
+The application enforces a hard combined stored-plus-reserved quota before writing to R2:
 
-The last point matters: this is currently a prototype, not a production marketplace. Listings are stored in each browser and are not shared across users. The backend validates submissions and stores uploaded images, but a database-backed listing service is still the next major feature.
+- production (`swapshelf-uploads`): **7 GiB** (`7516192768` bytes)
+- preview (`swapshelf-uploads-preview`): **1 GiB** (`1073741824` bytes)
+- at most five images per listing and 5 MiB per image
 
-## Run locally
+D1's singleton `storage_usage` row atomically reserves capacity. Each object's bytes move from reserved to stored only after `R2.put` succeeds. Failures delete already-uploaded objects and repair both counters. Successful moderation deletion removes the object before decrementing stored bytes, with SQL `MAX(0, ...)` preventing negative usage. Both buckets must remain private; files are read only through `/media/*`.
 
-Requirements: Node.js 20 or newer.
+## Local development
 
 ```bash
-cp .env.example .env
 npm install
+cp .dev.vars.example .dev.vars
+npm run db:migrate:local
 npm run dev
-```
-
-Open `http://localhost:3000`.
-
-For production, set a long random `SESSION_SECRET`, strong admin credentials, and a verified SendGrid sender. Never commit `.env`.
-
-## Useful commands
-
-```bash
-npm run check
-npm test
 npm run ci
-npm start
 ```
 
-## Environment variables
+## Cloudflare setup
 
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `PORT` | No | HTTP port, defaults to `3000` |
-| `NODE_ENV` | No | Set to `production` in deployment |
-| `SESSION_SECRET` | Production | Signs the session cookie |
-| `ADMIN_USERNAME` | For admin login | Admin account name |
-| `ADMIN_PASSWORD` | For admin login | Admin account password |
-| `SENDGRID_API_KEY` | For email | SendGrid API key |
-| `SENDGRID_FROM_EMAIL` | For email | Verified sender address |
-
-## Repository layout
-
-```text
-.
-├── .github/workflows/ci.yml
-├── middleware/
-│   ├── auth.js
-│   ├── upload.js
-│   └── validation.js
-├── public/
-│   ├── css/style.css
-│   ├── images/upi-qr.png
-│   ├── js/app.js
-│   └── uploads/.gitkeep
-├── test/app.test.js
-├── views/pages/home.ejs
-├── AGENTS.md
-├── package.json
-└── server.js
-```
-
-## Security decisions already applied
-
-- Secrets and uploaded user files are excluded from Git.
-- API keys are never printed to logs.
-- Admin credentials have no hard-coded fallback.
-- Uploaded file types and sizes are restricted.
-- Login and form endpoints are rate-limited.
-- Session cookies use `httpOnly` and `sameSite=lax`.
-- Request bodies are normalized and length-limited.
-
-## Next engineering milestone
-
-Replace browser `localStorage` with server-side persistence and authenticated CRUD APIs. Until that is done, admin moderation and listings are device-local, which is charming in the same way a cardboard door lock is charming.
+Replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc`, apply `npm run db:migrate:remote`, and configure `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `SESSION_SECRET` as Worker secrets. SendGrid remains optional through `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL`. Do not deploy this quota change until its PR is reviewed and the migration is applied.
