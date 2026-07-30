@@ -1,0 +1,8 @@
+updated_at=2026-07-30T18:15:20Z
+commit=20ea95829edfb284e01a4e5e6180b31474a1ceb0
+credentials=success
+install=success
+tests=success
+migration=success
+deployment=success
+preview_url=https://swapshelf-preview.area5115115.workers.dev
