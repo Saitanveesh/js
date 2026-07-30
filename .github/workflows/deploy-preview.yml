@@ -1,0 +1,64 @@
+name: Deploy Cloudflare Preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swapshelf-cloudflare-preview
+  cancel-in-progress: true
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package.json
+
+      - name: Verify Cloudflare credentials are configured
+        shell: bash
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Missing GitHub repository secrets: CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID." >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Run checks and tests
+        run: npm run check && npm test
+
+      - name: Apply preview D1 migrations
+        run: npx wrangler d1 migrations apply swapshelf-preview --env preview --remote
+
+      - name: Deploy preview Worker
+        shell: bash
+        run: |
+          set -o pipefail
+          npx wrangler deploy --env preview 2>&1 | tee deployment.log
+          URL=$(grep -Eo 'https://[^ ]+\.workers\.dev' deployment.log | tail -n 1 || true)
+          {
+            echo '## SwapShelf preview deployment'
+            if [ -n "$URL" ]; then
+              echo "Preview URL: $URL"
+            else
+              echo 'Deployment completed. Open the workflow log to copy the workers.dev URL.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
