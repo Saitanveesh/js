@@ -1,0 +1,28 @@
+{
+  "name": "swapshelf",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Student resource-sharing prototype for books and study notes.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "check": "node --check server.js && node --check public/js/app.js",
+    "test": "node --test",
+    "ci": "npm run check && npm test"
+  },
+  "author": "Sai Tanveesh",
+  "license": "MIT",
+  "engines": { "node": ">=20.0.0" },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "dotenv": "^17.2.2",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-session": "^1.18.2",
+    "helmet": "^8.1.0",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": { "nodemon": "^3.1.10" }
+}
