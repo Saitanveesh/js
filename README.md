@@ -24,4 +24,4 @@ npm run ci
 
 ## Cloudflare setup
 
-Replace `REPLACE_WITH_D1_DATABASE_ID` in `wrangler.jsonc`, apply `npm run db:migrate:remote`, and configure `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `SESSION_SECRET` as Worker secrets. SendGrid remains optional through `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL`. Do not deploy this quota change until its PR is reviewed and the migration is applied.
+The real production and preview D1 IDs and their separate private R2 bindings are configured in `wrangler.jsonc`. The databases already own `listings` through `0001_initial.sql`; this repository intentionally starts with `0002_add_storage_quota.sql`, which adds only quota/object-accounting tables. After inspecting each remote schema, apply it with `npm run db:migrate:production` and `npm run db:migrate:preview`. Configure `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `SESSION_SECRET` as Worker secrets. SendGrid remains optional through `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL`. Do not deploy this change until PR review and both migrations succeed.

@@ -27,11 +27,15 @@ async function admin(request, env) {
   if (!signature || Number(expires) < Date.now()) return false;
   return signature === await sign(env.SESSION_SECRET, `${expires}.${nonce}`);
 }
-function safeListing(row) { return { ...row, tags: JSON.parse(row.tags || '[]'), images: JSON.parse(row.images || '[]'), featured: Boolean(row.featured) }; }
+function mediaUrl(key) { return `/media/${encodeURIComponent(key)}`; }
+function safeListing(row) {
+  const { tags_json, image_keys_json, ...listing } = row;
+  return { ...listing, tags: JSON.parse(tags_json || '[]'), images: JSON.parse(image_keys_json || '[]').map(mediaUrl), featured: Boolean(row.featured) };
+}
 
 async function list(request, env) {
   const where = await admin(request, env) ? '' : " WHERE status = 'PUBLISHED'";
-  const result = await env.DB.prepare(`SELECT id,type,title,author_subject,isbn,description,condition,location,tags,images,status,featured,created_at,updated_at FROM listings${where} ORDER BY created_at DESC`).all();
+  const result = await env.DB.prepare(`SELECT id,type,title,author_subject,isbn,description,condition,location,tags_json,image_keys_json,status,featured,created_at,updated_at FROM listings${where} ORDER BY created_at DESC`).all();
   return json({ success: true, resources: result.results.map(safeListing) });
 }
 
@@ -53,7 +57,7 @@ async function create(request, env) {
     const now = new Date().toISOString();
     const tags = clean(form.get('tags'), 500).split(',').map(x => x.trim()).filter(Boolean).slice(0, 12);
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO listings (id,type,title,author_subject,isbn,description,condition,location,owner_email,tags,images,status,featured,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,type,clean(form.get('title'),160),clean(form.get('author_subject'),160),clean(form.get('isbn'),20),clean(form.get('description'),2000),condition,clean(form.get('location'),160),email,JSON.stringify(tags),JSON.stringify(uploaded.map(x=>x.url)),'PENDING',0,now,now),
+      env.DB.prepare('INSERT INTO listings (id,type,title,author_subject,isbn,description,condition,location,owner_email,tags_json,image_keys_json,status,featured,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').bind(id,type,clean(form.get('title'),160),clean(form.get('author_subject'),160),clean(form.get('isbn'),20),clean(form.get('description'),2000),condition,clean(form.get('location'),160),email,JSON.stringify(tags),JSON.stringify(uploaded.map(x=>x.key)),'PENDING',0,now,now),
       ...uploaded.map(object => env.DB.prepare('INSERT INTO listing_objects (object_key,listing_id,size_bytes,created_at) VALUES (?,?,?,?)').bind(object.key,id,object.size,now))
     ]);
     return json({ success: true, resource: { id, type, title: clean(form.get('title'),160), author_subject: clean(form.get('author_subject'),160), description: clean(form.get('description'),2000), condition, location: clean(form.get('location'),160), tags, images: uploaded.map(x=>x.url), status:'PENDING', featured:false, created_at:now, updated_at:now } }, 201);

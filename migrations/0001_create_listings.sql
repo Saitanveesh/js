@@ -1,6 +1,0 @@
-CREATE TABLE listings (id TEXT PRIMARY KEY,type TEXT NOT NULL CHECK(type IN ('BOOK','NOTES')),title TEXT NOT NULL,author_subject TEXT NOT NULL,isbn TEXT NOT NULL DEFAULT '',description TEXT NOT NULL,condition TEXT NOT NULL CHECK(condition IN ('Excellent','Good','Fair')),location TEXT NOT NULL,owner_email TEXT NOT NULL,tags TEXT NOT NULL DEFAULT '[]',images TEXT NOT NULL DEFAULT '[]',status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','PUBLISHED')),featured INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
-CREATE INDEX idx_listings_status_created ON listings(status,created_at DESC);
-CREATE TABLE listing_objects (object_key TEXT PRIMARY KEY,listing_id TEXT NOT NULL REFERENCES listings(id) ON DELETE CASCADE,size_bytes INTEGER NOT NULL CHECK(size_bytes >= 0),created_at TEXT NOT NULL);
-CREATE INDEX idx_listing_objects_listing ON listing_objects(listing_id);
-CREATE TABLE storage_usage (id INTEGER PRIMARY KEY CHECK(id=1),stored_bytes INTEGER NOT NULL DEFAULT 0 CHECK(stored_bytes >= 0),reserved_bytes INTEGER NOT NULL DEFAULT 0 CHECK(reserved_bytes >= 0),updated_at TEXT NOT NULL);
-INSERT INTO storage_usage(id,stored_bytes,reserved_bytes,updated_at) VALUES(1,0,0,CURRENT_TIMESTAMP);

@@ -1,1 +1,43 @@
-{"$schema":"node_modules/wrangler/config-schema.json","name":"swapshelf","main":"src/worker.js","compatibility_date":"2026-07-30","vars":{"ENVIRONMENT":"production","STORAGE_QUOTA_BYTES":"7516192768"},"assets":{"directory":"./public","binding":"ASSETS","run_worker_first":["/api/*","/admin/*","/health","/media/*"]},"d1_databases":[{"binding":"DB","database_name":"swapshelf","database_id":"REPLACE_WITH_D1_DATABASE_ID","migrations_dir":"migrations"}],"r2_buckets":[{"binding":"UPLOADS","bucket_name":"swapshelf-uploads","preview_bucket_name":"swapshelf-uploads-preview"}],"env":{"preview":{"vars":{"ENVIRONMENT":"preview","STORAGE_QUOTA_BYTES":"1073741824"}}}}
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "swapshelf",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-07-30",
+  "vars": {
+    "ENVIRONMENT": "production",
+    "STORAGE_QUOTA_BYTES": "7516192768"
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/admin/*", "/health", "/media/*"]
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "swapshelf",
+    "database_id": "95707b8f-a819-4f22-b5a7-488154011407",
+    "migrations_dir": "migrations"
+  }],
+  "r2_buckets": [{
+    "binding": "UPLOADS",
+    "bucket_name": "swapshelf-uploads"
+  }],
+  "env": {
+    "preview": {
+      "vars": {
+        "ENVIRONMENT": "preview",
+        "STORAGE_QUOTA_BYTES": "1073741824"
+      },
+      "d1_databases": [{
+        "binding": "DB",
+        "database_name": "swapshelf-preview",
+        "database_id": "e0eb7eb5-00a9-45db-b11d-82c8ea3e0f93",
+        "migrations_dir": "migrations"
+      }],
+      "r2_buckets": [{
+        "binding": "UPLOADS",
+        "bucket_name": "swapshelf-uploads-preview"
+      }]
+    }
+  }
+}
