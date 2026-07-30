@@ -14,9 +14,6 @@ jobs:
   deploy-preview:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
       - name: Check out main
@@ -31,13 +28,24 @@ jobs:
           cache: npm
           cache-dependency-path: package.json
 
-      - name: Verify Cloudflare credentials are configured
+      - name: Prepare Cloudflare credentials
         shell: bash
+        env:
+          RAW_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RAW_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+          token="$(printf '%s' "$RAW_CLOUDFLARE_API_TOKEN" | tr -d '[:space:]')"
+          account_id="$(printf '%s' "$RAW_CLOUDFLARE_ACCOUNT_ID" | tr -d '[:space:]')"
+
+          if [ -z "$token" ] || [ -z "$account_id" ]; then
             echo "Missing GitHub repository secrets: CLOUDFLARE_API_TOKEN and/or CLOUDFLARE_ACCOUNT_ID." >&2
             exit 1
           fi
+
+          echo "::add-mask::$token"
+          echo "::add-mask::$account_id"
+          echo "CLOUDFLARE_API_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "CLOUDFLARE_ACCOUNT_ID=$account_id" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
